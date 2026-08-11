@@ -29,7 +29,7 @@ experiment exists to measure.
 | Module | Responsibility |
 | --- | --- |
 | `geometry.py` | a/R\*, inclination, depth, duration from stellar + orbital parameters. pure math, no i/o |
-| `injection.py` | builds batman transit models and multiplies them into a curve. supersamples for the 29.4 min integration |
+| `injection.py` | builds batman transit models and multiplies them into a curve. supersamples over the exposure time it is handed |
 | `masking.py` | removes the *real* planets first, by iterative pre-whitening |
 | `search.py` | **the pipeline under test.** Savitzky-Golay detrend + BLS |
 | `recovery.py` | classifies a detection as `perfect` / `harmonic` / `fail` |
@@ -75,15 +75,3 @@ masking deliberately keeps the finer default instead. the 3000 setting was
 only validated out to ~12 d, and Kepler-10c sits at 45.3 d where a coarse grid
 is least trustworthy. it runs twice per experiment, so the extra ~60 s is
 cheap insurance.
-
----
-
-## tests
-
-```bash
-uv run pytest
-uv run pytest -m "not pipeline"   
-```
-
-nothing downloads. the `pipeline` tests inject into 60 d of synthetic white
-noise and run the actual detrend + BLS on it.

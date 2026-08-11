@@ -46,7 +46,6 @@ and what each module does.
 | `planets.ipynb` | the exploratory analysis |
 | `injrec/` | the injection–recovery harness |
 | `scripts/run_completeness.py` | runs the experiment, writes CSV + PNG |
-| `tests/` | `uv run pytest` |
 | `results/` | output of the last run |
 
 ## flags
@@ -55,13 +54,16 @@ and what each module does.
 
 | Flag | Default | Notes |
 | --- | --- | --- |
+| `--target` | Kepler-10 | anything MAST resolves |
+| `--mission`, `--author`, `--exptime` | Kepler, Kepler, 1800 | `TESS SPOC 120` for TESS 2-min |
 | `--periods`, `--radii` | 4, 4 | grid resolution. cells = periods × radii |
 | `--repeats` | 8 | injections per cell. this is what sets the error bars |
-| `--frequency-factor` | 3000 | BLS grid coarseness. higher is coarser and faster |
+| `--window-days` | 2.064 | detrending window, converted to cadences from the real cadence |
+| `--frequency-factor` | 3000 | BLS grid coarseness. tuned to Kepler's baseline, see below |
 | `--mask-planets` | 2 | known signals to remove first. for Kepler-10 that's b and c |
 | `--null-trials` | 32 | shuffled runs used to calibrate the detection threshold |
 | `--workers` | cpus−1 | |
-| `--seed` | 20260804 | makes the sampling reproducible |
+| `--seed` | 20260804 | seeds the grid sampling and the null shuffles |
 | `--outdir` | `results/` | |
 
 a bigger run:
@@ -71,6 +73,22 @@ uv run python scripts/run_completeness.py \
   --periods 5 --radii 5 --repeats 12 \
   --min-radius 0.2 --max-radius 4.0 \
   --min-period 1.0 --max-period 40.0
+```
+
+## another star
+
+```bash
+uv run python scripts/run_completeness.py --target Kepler-186
+```
+
+radius and mass come out of the light curve's own FITS header, so there is
+nothing to look up and nothing to keep in sync with the photometry. TESS works
+too:
+
+```bash
+uv run python scripts/run_completeness.py \
+  --target TIC 364186197 --mission TESS --author SPOC --exptime 120 \
+  --max-period 8 --frequency-factor 4
 ```
 
 ## outputs
