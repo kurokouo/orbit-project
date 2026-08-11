@@ -21,31 +21,49 @@ import pandas as pd
 from injrec.completeness import build_surface, plot_surface
 from injrec.geometry import StellarParams
 from injrec.grid import GridSpec, sample_signals
-from injrec.masking import find_and_mask
+from injrec.masking import MASK_MAX_PERIOD, find_and_mask
 from injrec.runner import detection_threshold, recovery_fraction, run_grid
-from injrec.search import SearchConfig
+from injrec.search import SearchConfig, window_cadences
 
 TARGET = "Kepler-10"
 OUTDIR = Path("results")
 
+# log g of the Sun
+LOGG_SUN = 4.438
 
-def load_base_curve(target: str = TARGET):
-    """grab the long-cadence data, stitch it, drop the NaNs.
 
-    author='Kepler' matters. without it the search also picks up a KBONUS-BKG
-    product that is a completely different star.
+def load_base_curve(target: str = TARGET, mission="Kepler", author="Kepler",
+                    exptime=1800):
+    """grab the data, stitch it, drop the NaNs.
+
+    author matters. without it the Kepler search also picks up a KBONUS-BKG
+    product that is a completely different star, and TESS gives you QLP and
+    TESS-SPOC alongside SPOC.
     """
     search = lk.search_lightcurve(
-        target, mission="Kepler", author="Kepler", exptime=1800
+        target, mission=mission, author=author, exptime=exptime
     )
     if len(search) == 0:
-        raise RuntimeError(f"no long-cadence Kepler products found for {target!r}")
+        raise RuntimeError(f"no {author} {exptime}s products found for {target!r}")
     return search.download_all().stitch().remove_nans()
+
+
+def star_from_header(light_curve) -> StellarParams:
+    """the curve already knows its star. RADIUS and LOGG ride along with it.
+    """
+    radius = light_curve.meta["RADIUS"]
+    mass = 10.0 ** (light_curve.meta["LOGG"] - LOGG_SUN) * radius**2
+    return StellarParams(radius_sun=radius, mass_sun=mass)
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--target", default=TARGET)
+    p.add_argument("--mission", default="Kepler")
+    p.add_argument("--author", default="Kepler", help="SPOC for TESS")
+    p.add_argument("--exptime", type=int, default=1800, help="120 for TESS 2-min")
+    p.add_argument("--window-days", type=float, default=2.064,
+                   help="detrending window, converted to cadences")
     p.add_argument("--periods", type=int, default=4, help="period bins")
     p.add_argument("--radii", type=int, default=4, help="radius bins")
     p.add_argument("--repeats", type=int, default=8, help="injections per cell")
@@ -62,6 +80,7 @@ def parse_args() -> argparse.Namespace:
                    help="percentile of the null peaks to require injections to beat")
     p.add_argument("--workers", type=int, default=None)
     p.add_argument("--outdir", type=Path, default=OUTDIR)
+    p.add_argument("--seed", type=int, default=20260804)
     return p.parse_args()
 
 
@@ -69,13 +88,21 @@ def main() -> None:
     sys.stdout.reconfigure(line_buffering=True)
     args = parse_args()
 
-    base = load_base_curve(args.target)
+    base = load_base_curve(args.target, args.mission, args.author, args.exptime)
     baseline = float(base.time.value.max() - base.time.value.min())
-    print(f"  {len(base)} points over {baseline:.0f} d")
+    cadence = float(np.median(np.diff(base.time.value))) * 24 * 60
+    window = window_cadences(args.window_days, cadence)
+    star = star_from_header(base)
+    print(f"  {len(base)} points over {baseline:.0f} d at {cadence:.2f} min")
+    print(f"  {star.radius_sun:.3f} Rsun, {star.mass_sun:.3f} Msun")
+    print(f"  detrending window {window} cadences = {window * cadence / 1440:.2f} d")
 
     if args.mask_planets:
         print(f"masking {args.mask_planets} known signals")
-        base, found = find_and_mask(base, n_signals=args.mask_planets)
+        mask_config = SearchConfig(
+            max_period=min(MASK_MAX_PERIOD, baseline / 2), window_length=window
+        )
+        base, found = find_and_mask(base, args.mask_planets, mask_config)
         for i, eph in enumerate(found, 1):
             print(f"  signal {i}: P = {eph.period:.5f} d, "
                   f"duration = {eph.duration * 24:.2f} h")
@@ -95,6 +122,7 @@ def main() -> None:
         min_period=args.min_period,
         max_period=args.max_period,
         frequency_factor=args.frequency_factor,
+        window_length=window,
     )
 
     # calibrated on the masked curve so the threshold matches the noise the
@@ -110,7 +138,7 @@ def main() -> None:
 
     print(f"running {spec.total_injections} injections ...")
     started = time.time()
-    trials = run_grid(base, signals, StellarParams(), config, threshold, args.workers)
+    trials = run_grid(base, signals, star, config, cadence, threshold, args.workers)
     elapsed = time.time() - started
     print(f"  done in {elapsed:.0f}s ({elapsed / len(trials):.2f}s per injection)")
 

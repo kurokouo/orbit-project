@@ -92,13 +92,18 @@ def build_transit_model(
     return np.asarray(model.light_curve(params), dtype=float)
 
 
-def inject_into(light_curve, signal: InjectedSignal, star: StellarParams):
+def inject_into(
+    light_curve,
+    signal: InjectedSignal,
+    star: StellarParams,
+    exp_time_days: float = LONG_CADENCE_DAYS,
+):
     """Copy of `light_curve` with `signal` multiplied in.
 
     Call this on the raw stitched curve, never on a flattened one.
     """
     model = build_transit_model(
-        np.asarray(light_curve.time.value, dtype=float), signal, star
+        np.asarray(light_curve.time.value, dtype=float), signal, star, exp_time_days
     )
     injected = light_curve.copy()
     injected.flux = light_curve.flux * model

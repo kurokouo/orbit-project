@@ -51,6 +51,12 @@ class Detection:
     power: float
 
 
+def window_cadences(window_days: float, cadence_minutes: float) -> int:
+    """savgol window in cadences, forced odd. 101 at Kepler long cadence."""
+    n = round(window_days * 24 * 60 / cadence_minutes)
+    return n if n % 2 else n + 1
+
+
 def detrend(light_curve, config: SearchConfig):
     """Window is in cadences, not days."""
     return light_curve.flatten(window_length=config.window_length)

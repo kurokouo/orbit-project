@@ -43,10 +43,16 @@ def _init_null_worker(time: np.ndarray, flux: np.ndarray, config: dict) -> None:
 
 
 def _init_worker(
-    time: np.ndarray, flux: np.ndarray, star: dict, config: dict, min_power: float
+    time: np.ndarray,
+    flux: np.ndarray,
+    star: dict,
+    config: dict,
+    cadence_minutes: float,
+    min_power: float,
 ) -> None:
     _init_null_worker(time, flux, config)
     _WORKER_STATE["star"] = StellarParams(**star)
+    _WORKER_STATE["cadence"] = cadence_minutes
     _WORKER_STATE["min_power"] = min_power
 
 
@@ -56,6 +62,7 @@ def _run_trial(signal: InjectedSignal) -> Trial:
         signal,
         _WORKER_STATE["star"],
         _WORKER_STATE["config"],
+        _WORKER_STATE["cadence"],
         _WORKER_STATE["min_power"],
     )
 
@@ -73,14 +80,14 @@ def run_single(
     signal: InjectedSignal,
     star: StellarParams,
     config: SearchConfig,
+    cadence_minutes: float,
     min_power: float = 0.0,
-    cadence_minutes: float = 29.4244,
 ) -> Trial:
     """Inject one signal, re-run the pipeline, classify the result.
 
     a peak at or below `min_power` is a miss whatever period it sits at.
     """
-    injected = inject_into(base_curve, signal, star)
+    injected = inject_into(base_curve, signal, star, cadence_minutes / (24 * 60))
     detection = search(injected, config)
     if detection.power <= min_power:
         outcome = Match.MISSED
@@ -104,6 +111,7 @@ def run_grid(
     signals: list[InjectedSignal],
     star: StellarParams,
     config: SearchConfig,
+    cadence_minutes: float,
     min_power: float = 0.0,
     max_workers: int | None = None,
 ) -> list[Trial]:
@@ -112,7 +120,7 @@ def run_grid(
     with ProcessPoolExecutor(
         max_workers=_worker_count(max_workers),
         initializer=_init_worker,
-        initargs=(time, flux, asdict(star), asdict(config), min_power),
+        initargs=(time, flux, asdict(star), asdict(config), cadence_minutes, min_power),
     ) as pool:
         return list(pool.map(_run_trial, signals, chunksize=1))
 
