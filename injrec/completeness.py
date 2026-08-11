@@ -1,9 +1,4 @@
 """turning a pile of trials into the completeness surface.
-
-bins everything into the grid cells and works out the recovery fraction per
-cell. empty cells stay NaN rather than 0 — "never tested" and "tested and
-never found" are different things, and collapsing them makes a sparse grid
-look like a sensitivity floor that isn't there.
 """
 
 from __future__ import annotations
@@ -21,8 +16,7 @@ from injrec.runner import Trial
 class CompletenessSurface:
     """Recovery fraction on the (period, radius) grid.
 
-    ``fraction`` is indexed [radius, period] so it displays with radius on
-    the vertical axis, which is the conventional orientation.
+    fraction is indexed [radius, period], so radius plots up the vertical axis.
     """
 
     period_edges: np.ndarray
@@ -36,15 +30,7 @@ def build_surface(
     spec: GridSpec,
     count_harmonics: bool = False,
 ) -> CompletenessSurface:
-    """Bin trials into grid cells and compute per-cell recovery fraction.
-
-    Cells with no trials are NaN rather than zero: "never tested" and
-    "tested and never recovered" are different statements, and collapsing
-    them makes a sparse grid look like a sensitivity floor.
-    """
-    if not trials:
-        raise ValueError("trials must not be empty")
-
+    """Bin trials into grid cells and get the recovery fraction of each."""
     accepted = {Match.EXACT.value}
     if count_harmonics:
         accepted.add(Match.HARMONIC.value)

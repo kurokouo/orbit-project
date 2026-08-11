@@ -1,10 +1,10 @@
-"""the head of the process — runs the whole experiment on real Kepler data.
+"""the head of the process. runs the whole experiment on real Kepler data.
 
-downloads the light curve, takes the known planets out, injects a grid of
-fake ones, and counts what comes back.
+downloads the light curve, takes the known planets out, injects a grid of fake
+ones, counts what comes back.
 
-writes a CSV of every trial plus a PNG of the completeness surface. re-analyse
-from the CSV, don't re-run — the injections are the expensive part.
+writes a CSV of every trial plus a PNG of the surface. re-analyse from the CSV
+rather than re-running, the injections are the expensive part.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ OUTDIR = Path("results")
 def load_base_curve(target: str = TARGET):
     """grab the long-cadence data, stitch it, drop the NaNs.
 
-    author='Kepler' matters — without it the search also picks up a
-    KBONUS-BKG product that's a completely different star.
+    author='Kepler' matters. without it the search also picks up a KBONUS-BKG
+    product that is a completely different star.
     """
     search = lk.search_lightcurve(
         target, mission="Kepler", author="Kepler", exptime=1800
@@ -53,9 +53,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-period", type=float, default=40.0)
     p.add_argument("--min-radius", type=float, default=0.2)
     p.add_argument("--max-radius", type=float, default=4.0)
-    # 3000 was validated against 500 on 166/74/47 ppm injections: identical
-    # recovery, ~5x faster. Lower it if you extend the baseline substantially,
-    # since frequency resolution scales as 1/baseline^2.
     p.add_argument("--frequency-factor", type=float, default=3000.0)
     p.add_argument("--mask-planets", type=int, default=2,
                    help="known signals to remove before injecting")
@@ -64,7 +61,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--null-percentile", type=float, default=99.0,
                    help="percentile of the null peaks to require injections to beat")
     p.add_argument("--workers", type=int, default=None)
-    p.add_argument("--seed", type=int, default=20260804)
     p.add_argument("--outdir", type=Path, default=OUTDIR)
     return p.parse_args()
 
@@ -101,10 +97,9 @@ def main() -> None:
         frequency_factor=args.frequency_factor,
     )
 
-    # Calibrated on the masked curve, so the threshold matches the noise the
-    # injections compete against. One BLS per trial, so it costs the same as
-    # `null_trials` injections. Announce it first or it reads as a hang.
-    print(f"calibrating detection threshold ({args.null_trials} shuffled runs) ...")
+    # calibrated on the masked curve so the threshold matches the noise the
+    # injections actually compete against. costs one BLS per shuffle
+    print(f" ({args.null_trials} shuffled runs) ...")
     started = time.time()
     threshold = detection_threshold(
         base, config, args.null_trials, args.null_percentile, args.seed, args.workers
@@ -121,9 +116,6 @@ def main() -> None:
 
     frame = pd.DataFrame([t.as_row() for t in trials])
     csv_path = args.outdir / "trials.csv"
-    # Created at write time, not only at startup: the directory can vanish
-    # mid-run, and losing minutes of finished injections to a missing mkdir
-    # is the most expensive failure here.
     args.outdir.mkdir(parents=True, exist_ok=True)
     frame.to_csv(csv_path, index=False)
 

@@ -4,9 +4,23 @@ the harness that measures how good the pipeline actually is. it injects fake
 transits of known size and period into the real light curve, runs the same
 search, and counts how many come back.
 
-the output is a completeness surface — the number you divide by to turn "i
-found 3 planets" into "there are N planets out there". without it a detection
-count means nothing.
+usage and flags are in the ../README.md, this file is the
+readme for the pipeline
+
+---
+
+## pipeline
+
+**inject on the raw curve, before detrending.**
+
+```
+stitch → mask known planets → INJECT → flatten → BLS → classify
+```
+
+injecting after `flatten()` skips the exact step whose signal loss the whole
+experiment exists to measure.
+
+`search()` takes a raw curve and detrends internally.
 
 ---
 
@@ -25,18 +39,16 @@ count means nothing.
 
 ---
 
-## the one rule
+## why the detection threshold exists
 
-**inject on the raw curve, before detrending.**
+BLS always returns *something*. on a curve with no planet in it, the peak
+lands wherever the noise happens to pile up, an undetectable injection scores
+as a recovery every time that noise peak lands nearby, and completeness comes
+out too high at exactly the small-planet end you care about.
 
-```
-stitch → mask known planets → INJECT → flatten → BLS → classify
-```
-
-injecting after `flatten()` skips the exact step whose signal loss the whole
-experiment exists to measure. nothing crashes, nothing errors, and
-completeness comes out too high, the worst kind of bug, because the number
-still looks reasonable.
+so `runner.detection_threshold` shuffles the flux of the masked curve 32 times
+and takes the 99th percentile of the peak powers. anything at or below that is
+indistinguishable from noise, whatever period it sits at.
 
 ---
 
@@ -55,7 +67,7 @@ BLS dominates.
 | null threshold, 32 shuffles | 7.0 s × 32, parallel |
 
 `frequency_factor=3000` is the default because it was checked against 500 on
-166 / 74 / 47 ppm injections and recovered the period exactly every time — not
+166 / 74 / 47 ppm injections and recovered the period exactly every time, not
 because it's fast. frequency resolution scales as 1/baseline², so re-check if
 you move to a much longer or shorter dataset.
 
@@ -66,33 +78,12 @@ cheap insurance.
 
 ---
 
-## usage
+## tests
 
 ```bash
-uv run python scripts/run_completeness.py
-uv run python scripts/run_completeness.py --periods 5 --radii 5 --repeats 12
+uv run pytest
+uv run pytest -m "not pipeline"   
 ```
 
-writes `results/trials.csv` and `results/completeness.png`. re-analyse from
-the CSV if you only want to check that
-
----
-
-## validation
-
-there's no test suite in the repo, so check the geometry by hand after
-touching `geometry.py`. it should reproduce published Kepler-10b values:
-
-```python
-from injrec.geometry import StellarParams, scaled_semi_major_axis, transit_duration
-
-star = StellarParams()                                        # Kepler-10
-a_rs = scaled_semi_major_axis(0.837491, star)
-print(a_rs)                                                   # expect ~3.4-3.5
-print(transit_duration(0.837491, a_rs, 0.01264, 0.30) * 24)   # expect ~1.8 h
-```
-
-a unit-conversion slip here shifts the entire completeness surface without
-raising anything, so it's worth the 10 seconds.
-
----
+nothing downloads. the `pipeline` tests inject into 60 d of synthetic white
+noise and run the actual detrend + BLS on it.

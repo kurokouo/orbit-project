@@ -1,8 +1,4 @@
 """actually running the thing.
-
-every trial is independent, so the grid parallelises for free. each worker
-keeps the base light curve in a module-level slot filled once when the pool
-starts
 """
 
 from __future__ import annotations
@@ -80,14 +76,9 @@ def run_single(
     min_power: float = 0.0,
     cadence_minutes: float = 29.4244,
 ) -> Trial:
-    """Inject one signal, re-run the pipeline, and classify the result.
+    """Inject one signal, re-run the pipeline, classify the result.
 
-    Injection happens on the raw curve; ``search`` detrends internally.
-
-    A peak at or below ``min_power`` is a miss whatever period it sits at.
-    Without that gate an undetectable injection counts as recovered whenever
-    the noise peak lands near the injected period. See ``detection_threshold``
-    for where the number comes from.
+    a peak at or below `min_power` is a miss whatever period it sits at.
     """
     injected = inject_into(base_curve, signal, star)
     detection = search(injected, config)
@@ -117,9 +108,6 @@ def run_grid(
     max_workers: int | None = None,
 ) -> list[Trial]:
     """Run every signal, in parallel across processes."""
-    if not signals:
-        raise ValueError("signals must not be empty")
-
     time, flux = _arrays(base_curve)
     with ProcessPoolExecutor(
         max_workers=_worker_count(max_workers),
@@ -139,19 +127,9 @@ def detection_threshold(
 ) -> float:
     """Peak BLS power a signal-free curve can reach by chance.
 
-    Runs ``n_trials`` shuffled copies of the curve and returns the requested
-    percentile of their peak powers. A detection at or below this is
-    indistinguishable from noise, whatever period it sits at.
-
-    At the default ``n_trials`` the 99th percentile is essentially the largest
-    null peak seen, so an injection has to beat every shuffled run. Raise
-    ``n_trials`` into the hundreds for the percentile to be literal.
+    Shuffles the flux `n_trials` times and returns that percentile of the peak
+    powers. Anything at or below it is indistinguishable from noise.
     """
-    if n_trials < 1:
-        raise ValueError(f"n_trials must be >= 1, got {n_trials}")
-    if not 0 < percentile <= 100:
-        raise ValueError(f"percentile must be in (0, 100], got {percentile}")
-
     time, flux = _arrays(base_curve)
     seeds = [seed + i for i in range(n_trials)]
     with ProcessPoolExecutor(
@@ -178,12 +156,7 @@ def _worker_count(max_workers: int | None) -> int:
 
 @dataclass(frozen=True)
 class Recovery:
-    """The headline number: what fraction of injections came back.
-
-    Carries an interval because the fraction alone invites over-reading. A few
-    hundred injections is a normal budget, and at that size the third digit is
-    noise.
-    """
+    """The headline number: what fraction of injections came back."""
 
     recovered: int
     total: int
@@ -215,15 +188,11 @@ def recovery_fraction(trials: list[Trial], count_harmonics: bool = False) -> Rec
 
 def _wilson_interval(hits: int, total: int, z: float = 1.959964) -> tuple[float, float]:
     """Wilson score interval on a binomial proportion, 95% by default.
-
-    Wilson rather than the textbook normal interval because completeness
-    saturates: the big-planet corner recovers everything and the small-planet
-    corner recovers nothing. At exactly 0 or 1 the normal interval has zero
-    width, claiming certainty where the estimate is weakest. Wilson stays
-    inside [0, 1] and keeps a sensible width there.
     """
     p = hits / total
+    # shrink factor, -> 1 as n grows, so this tends to the textbook interval
     denominator = 1.0 + z * z / total
     centre = (p + z * z / (2 * total)) / denominator
+    # binomial variance, plus the z^2/4n^2 that keeps p = 0 or 1 from zeroing it
     half = z / denominator * math.sqrt(p * (1 - p) / total + z * z / (4 * total * total))
     return max(0.0, centre - half), min(1.0, centre + half)

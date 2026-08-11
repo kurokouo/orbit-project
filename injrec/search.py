@@ -1,13 +1,9 @@
-"""detrend + BLS — this is the pipeline being measured.
+"""detrend + BLS. this is the pipeline being measured.
 
-everything else in the package exists to put this function under test, so
-changing anything here changes what the completeness surface means. keep the
-config explicit so a result can always be traced back to the exact settings
-that produced it.
+takes a *raw* curve and detrends internally, so the inject-before-detrend
+ordering can't be got wrong from outside.
 
-note `search()` takes a *raw* curve and detrends internally. that's
-deliberate: it makes the inject-before-detrend ordering impossible to get
-wrong from outside.
+BLS is Kovacs, Zucker & Mazeh (2002), via astropy through lightkurve.
 """
 
 from __future__ import annotations
@@ -27,6 +23,8 @@ class SearchConfig:
     min_duration: float = 0.03
     max_duration: float = 0.30
     n_durations: int = 12
+
+    # df = frequency_factor * min_duration / baseline^2, so higher is coarser
     frequency_factor: float = 500.0
 
     def __post_init__(self) -> None:
@@ -59,7 +57,6 @@ def detrend(light_curve, config: SearchConfig):
 
 
 def _periodogram(flat_curve, config: SearchConfig):
-    """Run BLS on an already-detrended curve."""
     return flat_curve.to_periodogram(
         method="bls",
         minimum_period=config.min_period,
@@ -70,8 +67,7 @@ def _periodogram(flat_curve, config: SearchConfig):
 
 
 def null_peak_power(light_curve, config: SearchConfig, rng: np.random.Generator) -> float:
-    """Peak BLS power from one signal-free copy of the same noise.
-    """
+    """Peak BLS power from one signal-free copy of the same noise."""
     flat = detrend(light_curve, config)
     order = rng.permutation(flat.flux.size)
     shuffled = flat.copy()

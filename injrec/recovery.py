@@ -1,7 +1,4 @@
-"""Deciding whether an injected signal was recovered.
-
-Keptsmall and dependency-free: this is the module whose bugs
-would be invisible in the final completeness surface.
+"""deciding whether an injected signal came back or not
 """
 
 from __future__ import annotations
@@ -23,17 +20,7 @@ def classify_recovery(
     tolerance: float = 0.01,
     max_harmonic: int = 3,
 ) -> Match:
-    """Classify a BLS detection against theperiod.
-    """
-    if recovered_period <= 0:
-        raise ValueError(f"recovered_period must be positive, got {recovered_period}")
-    if true_period <= 0:
-        raise ValueError(f"true_period must be positive, got {true_period}")
-    if tolerance <= 0:
-        raise ValueError(f"tolerance must be positive, got {tolerance}")
-    if max_harmonic < 1:
-        raise ValueError(f"max_harmonic must be >= 1, got {max_harmonic}")
-
+    """Classify a BLS detection against the period that was injected."""
     if _agrees(recovered_period, true_period, tolerance):
         return Match.EXACT
 

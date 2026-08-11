@@ -1,5 +1,4 @@
-"""picking which (period, radius) pairs to inject.
-"""
+"""picking which (period, radius) pairs to inject."""
 
 from __future__ import annotations
 
@@ -57,14 +56,11 @@ def sample_signals(
     baseline_days: float,
     rng: np.random.Generator,
 ) -> list[InjectedSignal]:
-    """Draw ``spec.repeats`` signals uniformly within each grid cell.
+    """Draw `spec.repeats` signals uniformly inside each grid cell.
 
-    Sampling within cells rather than at cell centres avoids a pathology
-    where every injection in a row shares one period and therefore one
-    alias structure, which makes recovery look artificially bimodal.
+    inside the cell, not at its centre. cell centres give every injection in a
+    row the same period, so they all alias the same way.
     """
-    if baseline_days <= 0:
-        raise ValueError(f"baseline_days must be positive, got {baseline_days}")
     if spec.period_range[1] > baseline_days:
         raise ValueError(
             f"period_range upper bound {spec.period_range[1]} d exceeds the "
